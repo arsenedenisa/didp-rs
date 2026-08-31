@@ -102,7 +102,7 @@ dependencies = [
 
 [[package]]
 name = "didp-yaml"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "approx",
  "dypdl",
@@ -120,7 +120,7 @@ dependencies = [
 
 [[package]]
 name = "didppy"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "didp-yaml",
  "dypdl",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "dypdl"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "approx",
  "fixedbitset",
@@ -145,7 +145,7 @@ dependencies = [
 
 [[package]]
 name = "dypdl-heuristic-search"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "bus",
  "crossbeam-channel",

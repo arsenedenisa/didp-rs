@@ -1,0 +1,122 @@
+cost: 5344
+transitions:
+- name: schedule
+  parameters:
+    i: 0
+- name: schedule
+  parameters:
+    i: 1
+- name: schedule
+  parameters:
+    i: 2
+- name: schedule
+  parameters:
+    i: 3
+- name: schedule
+  parameters:
+    i: 4
+- name: schedule
+  parameters:
+    i: 5
+- name: schedule
+  parameters:
+    i: 6
+- name: schedule
+  parameters:
+    i: 7
+- name: schedule
+  parameters:
+    i: 8
+- name: schedule
+  parameters:
+    i: 9
+- name: schedule
+  parameters:
+    i: 10
+- name: schedule
+  parameters:
+    i: 11
+- name: schedule
+  parameters:
+    i: 12
+- name: schedule
+  parameters:
+    i: 13
+- name: schedule
+  parameters:
+    i: 14
+- name: schedule
+  parameters:
+    i: 15
+- name: schedule
+  parameters:
+    i: 16
+- name: schedule
+  parameters:
+    i: 17
+- name: schedule
+  parameters:
+    i: 18
+- name: schedule
+  parameters:
+    i: 19
+- name: schedule
+  parameters:
+    i: 20
+- name: schedule
+  parameters:
+    i: 21
+- name: schedule
+  parameters:
+    i: 22
+- name: schedule
+  parameters:
+    i: 25
+- name: schedule
+  parameters:
+    i: 35
+- name: schedule
+  parameters:
+    i: 36
+- name: schedule
+  parameters:
+    i: 37
+- name: schedule
+  parameters:
+    i: 33
+- name: schedule
+  parameters:
+    i: 30
+- name: schedule
+  parameters:
+    i: 34
+- name: schedule
+  parameters:
+    i: 32
+- name: schedule
+  parameters:
+    i: 26
+- name: schedule
+  parameters:
+    i: 27
+- name: schedule
+  parameters:
+    i: 28
+- name: schedule
+  parameters:
+    i: 31
+- name: schedule
+  parameters:
+    i: 24
+- name: schedule
+  parameters:
+    i: 39
+- name: schedule
+  parameters:
+    i: 23
+- name: schedule
+  parameters:
+    i: 29
+- name: schedule
+  parameters:
+    i: 38

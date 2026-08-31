@@ -13,11 +13,13 @@ mod dual_bound_casbs;
 mod dual_bound_cbfs;
 mod dual_bound_dbdfs;
 mod dual_bound_dd_lns;
+mod dual_bound_deorder_lns;
 mod dual_bound_dfbb;
 mod dual_bound_lnbs;
 mod dual_bound_lnhdbs1;
 mod dual_bound_lnhdbs2;
 mod dual_bound_lnsbs;
+mod dual_bound_local_search;
 mod dual_bound_weighted_astar;
 mod expression_beam_search;
 mod f_evaluator_type;
@@ -35,11 +37,13 @@ pub use dual_bound_casbs::create_dual_bound_casbs;
 pub use dual_bound_cbfs::create_dual_bound_cbfs;
 pub use dual_bound_dbdfs::create_dual_bound_dbdfs;
 pub use dual_bound_dd_lns::create_dual_bound_dd_lns;
+pub use dual_bound_deorder_lns::create_dual_bound_deorder_lns;
 pub use dual_bound_dfbb::create_dual_bound_dfbb;
 pub use dual_bound_lnbs::create_dual_bound_lnbs;
 pub use dual_bound_lnhdbs1::create_dual_bound_lnhdbs1;
 pub use dual_bound_lnhdbs2::create_dual_bound_lnhdbs2;
 pub use dual_bound_lnsbs::create_dual_bound_lnsbs;
+pub use dual_bound_local_search::create_dual_bound_local_search;
 pub use dual_bound_weighted_astar::create_dual_bound_weighted_astar;
 pub use expression_beam_search::{CustomExpressionParameters, ExpressionBeamSearch};
 pub use f_evaluator_type::FEvaluatorType;
@@ -49,5 +53,7 @@ pub use parallel_search_algorithm::{
 pub use search_algorithm::data_structure::TransitionWithCustomCost;
 pub use search_algorithm::{
     BeamSearchParameters, BrfsParameters, CabsParameters, DbdfsParameters, DdLnsParameters,
-    ForwardRecursion, LnbsParameters, Parameters, ProgressiveSearchParameters, Search, Solution,
+    DeorderLnsParameters, ForwardRecursion, LnbsParameters,
+    LocalSearchMode, LocalSearchParameters, Neighborhoods, Parameters, ProgressiveSearchParameters,
+    Search, Solution,
 };

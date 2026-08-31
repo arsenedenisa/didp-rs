@@ -1,0 +1,7 @@
+solver: dual_bound_local_search
+config:
+  mode: simulated_annealing
+  initial_temperature: 10.0
+  cooling_rate: 0.9999
+  time_limit: 60
+  seed: 2023

@@ -1,0 +1,5 @@
+solver: dual_bound_local_search
+config:
+  mode: hill_climbing
+  time_limit: 60
+  seed: 2023

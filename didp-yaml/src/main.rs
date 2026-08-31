@@ -12,6 +12,13 @@ use std::process;
 use std::str;
 use std::time;
 
+// 1. read files containing domain, problem and config
+// 2. load model from domain and problem files
+// 3. create solver from config file
+// 4. run the solver on the model and print the solution
+
+// creates the solver from the config file and runs it on the model loaded from the domain and problem files
+
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
 
