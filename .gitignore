@@ -1,4 +1,7 @@
 /target
+/target-diag
 /experiments
+/analysis
 /target-deorder
 /unprocessed_instances
+solution.yaml
