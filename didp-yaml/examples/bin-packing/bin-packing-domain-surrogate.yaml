@@ -1,0 +1,84 @@
+domain: bin packing
+reduce: min
+cost_type: continuous
+objects:
+  - item
+state_variables:
+  - name: unpacked
+    type: set
+    object: item
+  - name: remaining
+    type: integer
+    preference: greater
+  - name: number_of_bins
+    type: element
+    object: item
+    preference: less
+tables:
+  - name: c
+    type: integer
+  - name: weight
+    type: integer
+    args:
+      - item
+  - name: weight_2_1
+    type: integer
+    args:
+      - item
+  - name: weight_2_2
+    type: continuous
+    args:
+      - item
+  - name: weight_3
+    type: continuous
+    args:
+      - item
+transitions:
+  - name: pack
+    parameters:
+      - name: i
+        object: unpacked
+    cost: cost
+    preconditions:
+      - (<= (weight i) remaining)
+      - (>= (+ i 1) number_of_bins)
+    effect:
+      unpacked: (remove i unpacked)
+      remaining: (- remaining (weight i))
+  # Same objective as bin-packing-domain.yaml (bin count) plus a tiny
+  # surrogate term riding along in the fractional part: eps * (fill
+  # fraction of the bin being closed)^2, eps = 1e-6. Bin count is an
+  # integer and the surrogate is bounded well under 1 in total (each term
+  # in [0, 1e-6], at most a few thousand bins), so it can never change
+  # which integer bin-count is better -- it only breaks ties among
+  # same-bin-count neighbors during local search, in favor of solutions
+  # that pack bins fuller (Falkenauer-style sum-of-squared-loads
+  # surrogate: mosp's own analysis flagged raw bin count as flat/gradient
+  # -free for SA; the fill-fraction squared is not, since almost every
+  # swap/relocate changes how full some closed bin ends up).
+  # NOTE: only accounts for bins closed by an explicit open-and-pack; the
+  # final (never re-closed) bin's fill fraction is not included. Accepted
+  # as an approximation since this is only used as a local-search
+  # tie-break, not the reported objective.
+  - name: open-and-pack
+    cost: (+ cost (+ 1 (* 0.000001 (* (/ (- c remaining) c) (/ (- c remaining) c)))))
+    effect:
+      unpacked: (remove i unpacked)
+      remaining: (- c (weight i))
+      number_of_bins: (+ 1 number_of_bins)
+    parameters:
+      - name: i
+        object: unpacked
+    preconditions:
+      - (>= i number_of_bins)
+      - forall:
+          - name: j
+            object: unpacked
+        condition: (> (weight j) remaining)
+    forced: true
+base_cases:
+  - - (is_empty unpacked)
+dual_bounds:
+  - (ceil (/ (- (sum weight unpacked) remaining) c))
+  - (- (+ (sum weight_2_1 unpacked) (ceil (sum weight_2_2 unpacked))) (if (>= remaining (/ c 2.0)) 1 0))
+  - (- (ceil (sum weight_3 unpacked)) (if (>= remaining (/ c 3.0)) 1 0))

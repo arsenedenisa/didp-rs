@@ -1,0 +1,271 @@
+domain: MDKP-m30
+reduce: max
+cost_type: integer
+objects:
+  - item
+state_variables:
+  - name: i
+    type: element
+    object: item
+  - name: r_0
+    type: integer
+  - name: r_1
+    type: integer
+  - name: r_2
+    type: integer
+  - name: r_3
+    type: integer
+  - name: r_4
+    type: integer
+  - name: r_5
+    type: integer
+  - name: r_6
+    type: integer
+  - name: r_7
+    type: integer
+  - name: r_8
+    type: integer
+  - name: r_9
+    type: integer
+  - name: r_10
+    type: integer
+  - name: r_11
+    type: integer
+  - name: r_12
+    type: integer
+  - name: r_13
+    type: integer
+  - name: r_14
+    type: integer
+  - name: r_15
+    type: integer
+  - name: r_16
+    type: integer
+  - name: r_17
+    type: integer
+  - name: r_18
+    type: integer
+  - name: r_19
+    type: integer
+  - name: r_20
+    type: integer
+  - name: r_21
+    type: integer
+  - name: r_22
+    type: integer
+  - name: r_23
+    type: integer
+  - name: r_24
+    type: integer
+  - name: r_25
+    type: integer
+  - name: r_26
+    type: integer
+  - name: r_27
+    type: integer
+  - name: r_28
+    type: integer
+  - name: r_29
+    type: integer
+tables:
+  - name: number_of_items
+    type: element
+  - name: p
+    type: integer
+    args:
+      - item
+  - name: w_0
+    type: integer
+    args:
+      - item
+  - name: w_1
+    type: integer
+    args:
+      - item
+  - name: w_2
+    type: integer
+    args:
+      - item
+  - name: w_3
+    type: integer
+    args:
+      - item
+  - name: w_4
+    type: integer
+    args:
+      - item
+  - name: w_5
+    type: integer
+    args:
+      - item
+  - name: w_6
+    type: integer
+    args:
+      - item
+  - name: w_7
+    type: integer
+    args:
+      - item
+  - name: w_8
+    type: integer
+    args:
+      - item
+  - name: w_9
+    type: integer
+    args:
+      - item
+  - name: w_10
+    type: integer
+    args:
+      - item
+  - name: w_11
+    type: integer
+    args:
+      - item
+  - name: w_12
+    type: integer
+    args:
+      - item
+  - name: w_13
+    type: integer
+    args:
+      - item
+  - name: w_14
+    type: integer
+    args:
+      - item
+  - name: w_15
+    type: integer
+    args:
+      - item
+  - name: w_16
+    type: integer
+    args:
+      - item
+  - name: w_17
+    type: integer
+    args:
+      - item
+  - name: w_18
+    type: integer
+    args:
+      - item
+  - name: w_19
+    type: integer
+    args:
+      - item
+  - name: w_20
+    type: integer
+    args:
+      - item
+  - name: w_21
+    type: integer
+    args:
+      - item
+  - name: w_22
+    type: integer
+    args:
+      - item
+  - name: w_23
+    type: integer
+    args:
+      - item
+  - name: w_24
+    type: integer
+    args:
+      - item
+  - name: w_25
+    type: integer
+    args:
+      - item
+  - name: w_26
+    type: integer
+    args:
+      - item
+  - name: w_27
+    type: integer
+    args:
+      - item
+  - name: w_28
+    type: integer
+    args:
+      - item
+  - name: w_29
+    type: integer
+    args:
+      - item
+transitions:
+  - name: pack
+    cost: (+ (p i) cost)
+    effect:
+      i: (+ i 1)
+      r_0: (- r_0 (w_0 i))
+      r_1: (- r_1 (w_1 i))
+      r_2: (- r_2 (w_2 i))
+      r_3: (- r_3 (w_3 i))
+      r_4: (- r_4 (w_4 i))
+      r_5: (- r_5 (w_5 i))
+      r_6: (- r_6 (w_6 i))
+      r_7: (- r_7 (w_7 i))
+      r_8: (- r_8 (w_8 i))
+      r_9: (- r_9 (w_9 i))
+      r_10: (- r_10 (w_10 i))
+      r_11: (- r_11 (w_11 i))
+      r_12: (- r_12 (w_12 i))
+      r_13: (- r_13 (w_13 i))
+      r_14: (- r_14 (w_14 i))
+      r_15: (- r_15 (w_15 i))
+      r_16: (- r_16 (w_16 i))
+      r_17: (- r_17 (w_17 i))
+      r_18: (- r_18 (w_18 i))
+      r_19: (- r_19 (w_19 i))
+      r_20: (- r_20 (w_20 i))
+      r_21: (- r_21 (w_21 i))
+      r_22: (- r_22 (w_22 i))
+      r_23: (- r_23 (w_23 i))
+      r_24: (- r_24 (w_24 i))
+      r_25: (- r_25 (w_25 i))
+      r_26: (- r_26 (w_26 i))
+      r_27: (- r_27 (w_27 i))
+      r_28: (- r_28 (w_28 i))
+      r_29: (- r_29 (w_29 i))
+    preconditions:
+      - (< i number_of_items)
+      - (>= r_0 (w_0 i))
+      - (>= r_1 (w_1 i))
+      - (>= r_2 (w_2 i))
+      - (>= r_3 (w_3 i))
+      - (>= r_4 (w_4 i))
+      - (>= r_5 (w_5 i))
+      - (>= r_6 (w_6 i))
+      - (>= r_7 (w_7 i))
+      - (>= r_8 (w_8 i))
+      - (>= r_9 (w_9 i))
+      - (>= r_10 (w_10 i))
+      - (>= r_11 (w_11 i))
+      - (>= r_12 (w_12 i))
+      - (>= r_13 (w_13 i))
+      - (>= r_14 (w_14 i))
+      - (>= r_15 (w_15 i))
+      - (>= r_16 (w_16 i))
+      - (>= r_17 (w_17 i))
+      - (>= r_18 (w_18 i))
+      - (>= r_19 (w_19 i))
+      - (>= r_20 (w_20 i))
+      - (>= r_21 (w_21 i))
+      - (>= r_22 (w_22 i))
+      - (>= r_23 (w_23 i))
+      - (>= r_24 (w_24 i))
+      - (>= r_25 (w_25 i))
+      - (>= r_26 (w_26 i))
+      - (>= r_27 (w_27 i))
+      - (>= r_28 (w_28 i))
+      - (>= r_29 (w_29 i))
+  - name: ignore
+    cost: cost
+    effect:
+      i: (+ i 1)
+    preconditions:
+      - (< i number_of_items)
+base_cases:
+  - - (= i number_of_items)

@@ -1,0 +1,111 @@
+domain: MDKP-m10
+reduce: max
+cost_type: integer
+objects:
+  - item
+state_variables:
+  - name: i
+    type: element
+    object: item
+  - name: r_0
+    type: integer
+  - name: r_1
+    type: integer
+  - name: r_2
+    type: integer
+  - name: r_3
+    type: integer
+  - name: r_4
+    type: integer
+  - name: r_5
+    type: integer
+  - name: r_6
+    type: integer
+  - name: r_7
+    type: integer
+  - name: r_8
+    type: integer
+  - name: r_9
+    type: integer
+tables:
+  - name: number_of_items
+    type: element
+  - name: p
+    type: integer
+    args:
+      - item
+  - name: w_0
+    type: integer
+    args:
+      - item
+  - name: w_1
+    type: integer
+    args:
+      - item
+  - name: w_2
+    type: integer
+    args:
+      - item
+  - name: w_3
+    type: integer
+    args:
+      - item
+  - name: w_4
+    type: integer
+    args:
+      - item
+  - name: w_5
+    type: integer
+    args:
+      - item
+  - name: w_6
+    type: integer
+    args:
+      - item
+  - name: w_7
+    type: integer
+    args:
+      - item
+  - name: w_8
+    type: integer
+    args:
+      - item
+  - name: w_9
+    type: integer
+    args:
+      - item
+transitions:
+  - name: pack
+    cost: (+ (p i) cost)
+    effect:
+      i: (+ i 1)
+      r_0: (- r_0 (w_0 i))
+      r_1: (- r_1 (w_1 i))
+      r_2: (- r_2 (w_2 i))
+      r_3: (- r_3 (w_3 i))
+      r_4: (- r_4 (w_4 i))
+      r_5: (- r_5 (w_5 i))
+      r_6: (- r_6 (w_6 i))
+      r_7: (- r_7 (w_7 i))
+      r_8: (- r_8 (w_8 i))
+      r_9: (- r_9 (w_9 i))
+    preconditions:
+      - (< i number_of_items)
+      - (>= r_0 (w_0 i))
+      - (>= r_1 (w_1 i))
+      - (>= r_2 (w_2 i))
+      - (>= r_3 (w_3 i))
+      - (>= r_4 (w_4 i))
+      - (>= r_5 (w_5 i))
+      - (>= r_6 (w_6 i))
+      - (>= r_7 (w_7 i))
+      - (>= r_8 (w_8 i))
+      - (>= r_9 (w_9 i))
+  - name: ignore
+    cost: cost
+    effect:
+      i: (+ i 1)
+    preconditions:
+      - (< i number_of_items)
+base_cases:
+  - - (= i number_of_items)
