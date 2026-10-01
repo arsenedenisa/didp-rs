@@ -1,0 +1,11 @@
+solver: dual_bound_local_search
+config:
+  mode: hill_climbing
+  swap: true
+  relocate: true
+  replace: true
+  twoopt: true
+  neighborhood_selection: sequential
+  neighborhood_switch_iterations: 20
+  time_limit: 60
+  seed: 2023

@@ -1,0 +1,16 @@
+solver: dual_bound_local_search
+config:
+  mode: hill_climbing
+  swap: true
+  relocate: true
+  replace: true
+  twoopt: true
+  neighborhood_selection: adaptive
+  neighborhood_switch_iterations: 20
+  neighborhood_exploration_constant: 1.4142135623730951
+  neighborhood_window_size: 50
+  cabs_on_stuck: true
+  cabs_initial_beam_size: 1
+  cabs_max_beam_size: 10000
+  time_limit: 60
+  seed: 2023

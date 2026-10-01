@@ -1,0 +1,19 @@
+solver: dual_bound_position_lns_local_search
+config:
+  time_limit: 10
+  seed: 2023
+  neighborhood_size: 8
+  position_weight: 1.0
+  cost_weight: 1.0
+  relatedness_determinism: 5.0
+  full_reinsert_probability: 1.0
+  enable_stagnation_seed: false
+  beam_width: 16
+  max_branching: 20
+  mode: hill_climbing
+  swap: true
+  relocate: true
+  replace: false
+  twoopt: false
+  cabs_initial_beam_size: 1
+  cabs_max_beam_size: 10000
