@@ -206,6 +206,16 @@ pub struct Lnbs<
     rng: Pcg64Mcg,
     time_keeper: TimeKeeper,
     first_call: bool,
+    // DIDP_ACCEPT_DIAG: prints total_iterations/total_accepts once the
+    // search terminates -- same flag deorder_lns.rs uses, so either
+    // solver's totals come out under the same on-switch. Exists to answer
+    // whether a run-to-run cost swing at a fixed wall-clock time_limit
+    // (observed on deorder_lns/instance_270: 899153 vs 899481 at the same
+    // seed) comes from doing far fewer loop iterations that run, or the
+    // same number with a different accept rate -- see search_next's doc.
+    iter_diag_enabled: bool,
+    iteration_count: u64,
+    accept_count: u64,
 }
 
 impl<T, N, B, G, V, D, R, K> Lnbs<T, N, B, G, V, D, R, K>
@@ -295,6 +305,9 @@ where
             rng: Pcg64Mcg::seed_from_u64(parameters.seed),
             time_keeper,
             first_call: true,
+            iter_diag_enabled: std::env::var("DIDP_ACCEPT_DIAG").is_ok(),
+            iteration_count: 0,
+            accept_count: 0,
         }
     }
 
@@ -332,6 +345,8 @@ where
         };
 
         loop {
+            self.iteration_count += 1;
+
             let result = self.select_depth();
 
             if result.is_none() {
@@ -450,6 +465,7 @@ where
 
                     self.input.solution.cost = Some(cost);
                     self.input.solution.time = self.time_keeper.elapsed_time();
+                    self.accept_count += 1;
 
                     if !self.quiet {
                         println!(
@@ -683,6 +699,14 @@ where
 {
     fn search_next(&mut self) -> Result<(Solution<T>, bool), Box<dyn Error>> {
         let (solution, is_terminated) = self.search_inner();
+
+        if is_terminated && self.iter_diag_enabled {
+            eprintln!(
+                "[lnbs iter diag] total_iterations={} total_accepts={}",
+                self.iteration_count, self.accept_count
+            );
+        }
+
         let solution = Solution {
             cost: solution.cost,
             best_bound: solution.best_bound,

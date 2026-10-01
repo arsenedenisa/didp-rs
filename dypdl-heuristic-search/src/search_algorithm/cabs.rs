@@ -175,6 +175,14 @@ where
         }
     }
 
+    /// Returns the beam size the search is currently at (or ended at, after `search_inner`
+    /// returns) -- the next power-of-two step in CABS's exponential widening, not necessarily
+    /// the beam size that produced the last returned solution, since it is incremented
+    /// immediately after each beam search call.
+    pub fn beam_size(&self) -> usize {
+        self.beam_size
+    }
+
     //// Search for the next solution, returning the solution without converting it into `Transition`.
     pub fn search_inner(&mut self) -> (Solution<T, TransitionWithId<V>>, bool) {
         self.time_keeper.start();

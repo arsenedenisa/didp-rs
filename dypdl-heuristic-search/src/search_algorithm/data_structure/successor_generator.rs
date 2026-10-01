@@ -290,11 +290,12 @@ where
         &mut self,
         state: &S,
         function_cache: &mut StateFunctionCache,
+        candidates: &[U],
     ) {
         self.is_applicable.clear();
         self.is_applicable.resize(self.dominance_map.len(), false);
 
-        for t in self.applicable_transitions.iter() {
+        for t in candidates.iter() {
             self.is_applicable[t.id] = true;
         }
 
@@ -302,7 +303,7 @@ where
             .resize(self.dominance_map.len(), Vec::new());
         self.adjacent_list.iter_mut().for_each(|e| e.clear());
 
-        for t in self.applicable_transitions.iter() {
+        for t in candidates.iter() {
             for (next, conditions) in self.dominance_map[t.id].iter() {
                 if self.is_applicable[*next]
                     && conditions.iter().all(|c| {
@@ -318,6 +319,40 @@ where
                 }
             }
         }
+    }
+
+    /// Removes transitions dominated by another transition also present in `candidates`,
+    /// according to the model's transition dominance rules active at `state`.
+    ///
+    /// Unlike [`Self::generate_applicable_transitions`], `candidates` need not be this
+    /// generator's own applicable-transitions buffer -- any subset of transitions with ids
+    /// valid for this generator's model works (e.g. a caller-restricted candidate pool), which
+    /// is what lets other callers reuse the same dominance logic. A no-op when `candidates` has
+    /// at most one element or the model declares no transition dominance.
+    pub fn filter_dominated<S: dypdl::StateInterface>(
+        &mut self,
+        state: &S,
+        function_cache: &mut StateFunctionCache,
+        candidates: &mut Vec<U>,
+    ) {
+        if candidates.len() <= 1 || self.model.transition_dominance.is_empty() {
+            return;
+        }
+
+        self.extract_active_edges(state, function_cache, candidates);
+        tarjan(
+            &self.adjacent_list,
+            &mut self.tarjan_temporal,
+            &mut self.node_to_scc_root,
+        );
+        check_dominance(
+            &self.adjacent_list,
+            candidates,
+            &self.node_to_scc_root,
+            &mut self.is_applicable,
+        );
+
+        candidates.retain(|t| self.is_applicable[t.id]);
     }
 
     /// Returns a vector of applicable transitions.
@@ -362,26 +397,11 @@ where
             return;
         }
 
-        self.extract_active_edges(state, function_cache);
-        tarjan(
-            &self.adjacent_list,
-            &mut self.tarjan_temporal,
-            &mut self.node_to_scc_root,
-        );
-        check_dominance(
-            &self.adjacent_list,
-            &self.applicable_transitions,
-            &self.node_to_scc_root,
-            &mut self.is_applicable,
-        );
-
+        let mut candidates = mem::take(&mut self.applicable_transitions);
+        self.filter_dominated(state, function_cache, &mut candidates);
         result.clear();
-
-        for t in self.applicable_transitions.drain(..) {
-            if self.is_applicable[t.id] {
-                result.push(t);
-            }
-        }
+        result.append(&mut candidates);
+        self.applicable_transitions = candidates;
     }
 
     /// Returns applicable transitions as an iterator.

@@ -3,7 +3,7 @@ use crate::util;
 use dypdl::variable_type::Numeric;
 use dypdl_heuristic_search::{
     create_dual_bound_local_search, BeamSearchParameters, CabsParameters, FEvaluatorType,
-    LocalSearchMode, LocalSearchParameters, Neighborhoods, Search,
+    LocalSearchMode, LocalSearchParameters, Neighborhoods, NeighborhoodSelection, Search,
 };
 use std::error::Error;
 use std::rc::Rc;
@@ -67,13 +67,29 @@ where
                         Some(value) => util::get_numeric::<f64>(value)?,
                         None => 10.0,
                     };
-                let cooling_rate = match map.get(&yaml_rust::Yaml::from_str("cooling_rate")) {
+                // Absolute temperature the cooling schedule should reach right as
+                // time_limit runs out (see LocalSearchMode::SimulatedAnnealing's doc
+                // for why cooling is time-based rather than a per-call `cooling_rate`
+                // multiplicative decay). Default reaches 1% of initial_temperature by
+                // the end of the budget.
+                let final_temperature = match map.get(&yaml_rust::Yaml::from_str("final_temperature"))
+                {
                     Some(value) => util::get_numeric::<f64>(value)?,
-                    None => 0.9999,
+                    None => initial_temperature * 0.01,
+                };
+                // `cooling_rate`, if present, switches back to the old per-call
+                // multiplicative decay (`temperature *= cooling_rate` after every
+                // non-improving candidate) instead of the time-based schedule above --
+                // kept only to A/B the two schedules from the same binary/config.
+                let cooling_rate = match map.get(&yaml_rust::Yaml::from_str("cooling_rate")) {
+                    Some(value) => Some(util::get_numeric::<f64>(value)?),
+                    None => None,
                 };
                 LocalSearchMode::SimulatedAnnealing {
                     T0: initial_temperature,
-                    alpha: cooling_rate,
+                    final_temp_ratio: final_temperature / initial_temperature,
+                    legacy_cooling: cooling_rate.is_some(),
+                    alpha: cooling_rate.unwrap_or(0.9999),
                 }
             }
             mode => {
@@ -141,6 +157,81 @@ where
         )
         .into());
     }
+    let neighborhood_selection = match map.get(&yaml_rust::Yaml::from_str("neighborhood_selection")) {
+        Some(yaml_rust::Yaml::String(value)) => match &value[..] {
+            "random" => NeighborhoodSelection::Random,
+            "sequential" => {
+                let iterations =
+                    match map.get(&yaml_rust::Yaml::from_str("neighborhood_switch_iterations")) {
+                        Some(yaml_rust::Yaml::Integer(value)) if *value >= 1 => *value as usize,
+                        Some(value) => {
+                            return Err(util::YamlContentErr::new(format!(
+                                "expected a positive Integer for `neighborhood_switch_iterations`, but found `{value:?}`",
+                            ))
+                            .into())
+                        }
+                        None => 20,
+                    };
+
+                NeighborhoodSelection::Sequential { iterations }
+            }
+            "adaptive" => {
+                let iterations =
+                    match map.get(&yaml_rust::Yaml::from_str("neighborhood_switch_iterations")) {
+                        Some(yaml_rust::Yaml::Integer(value)) if *value >= 1 => *value as usize,
+                        Some(value) => {
+                            return Err(util::YamlContentErr::new(format!(
+                                "expected a positive Integer for `neighborhood_switch_iterations`, but found `{value:?}`",
+                            ))
+                            .into())
+                        }
+                        None => 20,
+                    };
+                let exploration_constant =
+                    match map.get(&yaml_rust::Yaml::from_str("neighborhood_exploration_constant")) {
+                        Some(value) => {
+                            let value = util::get_numeric::<f64>(value)?;
+
+                            if value < 0.0 {
+                                return Err(util::YamlContentErr::new(format!(
+                                    "expected `neighborhood_exploration_constant` to be non-negative, but found `{value}`",
+                                ))
+                                .into());
+                            }
+
+                            value
+                        }
+                        None => std::f64::consts::SQRT_2,
+                    };
+                let window_size =
+                    match map.get(&yaml_rust::Yaml::from_str("neighborhood_window_size")) {
+                        Some(yaml_rust::Yaml::Integer(value)) if *value >= 1 => *value as usize,
+                        Some(value) => {
+                            return Err(util::YamlContentErr::new(format!(
+                                "expected a positive Integer for `neighborhood_window_size`, but found `{value:?}`",
+                            ))
+                            .into())
+                        }
+                        None => 50,
+                    };
+
+                NeighborhoodSelection::Adaptive { iterations, exploration_constant, window_size }
+            }
+            selection => {
+                return Err(util::YamlContentErr::new(format!(
+                    "unexpected value for `neighborhood_selection`: `{selection}`",
+                ))
+                .into())
+            }
+        },
+        None => NeighborhoodSelection::default(),
+        value => {
+            return Err(util::YamlContentErr::new(format!(
+                "expected String for `neighborhood_selection`, but found `{value:?}`",
+            ))
+            .into())
+        }
+    };
     let cabs_beam_size = match map.get(&yaml_rust::Yaml::from_str("cabs_initial_beam_size")) {
         Some(yaml_rust::Yaml::Integer(value)) => *value as usize,
         Some(value) => {
@@ -161,12 +252,34 @@ where
         }
         None => None,
     };
+    // When set, hill climbing alternates with CABS instead of stopping the first time it gets
+    // stuck in a local optimum: each time that happens, it runs one more bounded CABS round
+    // (using `cabs_initial_beam_size`/`cabs_max_beam_size` above) and resumes hill climbing from
+    // whatever that round finds, until the time limit is reached or CABS proves the incumbent
+    // optimal. Only meaningful with `mode: hill_climbing`.
+    let cabs_on_stuck = match map.get(&yaml_rust::Yaml::from_str("cabs_on_stuck")) {
+        Some(yaml_rust::Yaml::Boolean(value)) => *value,
+        None => false,
+        value => {
+            return Err(util::YamlContentErr::new(format!(
+                "expected Boolean for `cabs_on_stuck`, but found `{value:?}`",
+            ))
+            .into())
+        }
+    };
+    if cabs_on_stuck && !matches!(mode, LocalSearchMode::HillClimbing) {
+        return Err(util::YamlContentErr::new(
+            "`cabs_on_stuck` requires `mode: hill_climbing`".to_string(),
+        )
+        .into());
+    }
 
     let parameters = solver_parameters::parse_from_map(map)?;
     let local_search_parameters = LocalSearchParameters {
         seed,
         mode,
         neighborhoods: Neighborhoods { swap, relocate, replace, twoopt },
+        neighborhood_selection,
         parameters,
     };
     let cabs_parameters = CabsParameters {
@@ -183,5 +296,6 @@ where
         local_search_parameters,
         cabs_parameters,
         f_evaluator_type,
+        cabs_on_stuck,
     ))
 }

@@ -20,6 +20,9 @@ mod dual_bound_lnhdbs1;
 mod dual_bound_lnhdbs2;
 mod dual_bound_lnsbs;
 mod dual_bound_local_search;
+mod dual_bound_model_aware_local_search;
+mod dual_bound_position_lns;
+mod dual_bound_position_lns_local_search;
 mod dual_bound_weighted_astar;
 mod expression_beam_search;
 mod f_evaluator_type;
@@ -44,6 +47,9 @@ pub use dual_bound_lnhdbs1::create_dual_bound_lnhdbs1;
 pub use dual_bound_lnhdbs2::create_dual_bound_lnhdbs2;
 pub use dual_bound_lnsbs::create_dual_bound_lnsbs;
 pub use dual_bound_local_search::create_dual_bound_local_search;
+pub use dual_bound_model_aware_local_search::create_dual_bound_model_aware_local_search;
+pub use dual_bound_position_lns::create_dual_bound_position_lns;
+pub use dual_bound_position_lns_local_search::create_dual_bound_position_lns_local_search;
 pub use dual_bound_weighted_astar::create_dual_bound_weighted_astar;
 pub use expression_beam_search::{CustomExpressionParameters, ExpressionBeamSearch};
 pub use f_evaluator_type::FEvaluatorType;
@@ -54,6 +60,9 @@ pub use search_algorithm::data_structure::TransitionWithCustomCost;
 pub use search_algorithm::{
     BeamSearchParameters, BrfsParameters, CabsParameters, DbdfsParameters, DdLnsParameters,
     DeorderLnsParameters, ForwardRecursion, LnbsParameters,
-    LocalSearchMode, LocalSearchParameters, Neighborhoods, Parameters, ProgressiveSearchParameters,
+    LocalSearchMode, LocalSearchParameters, ModelAwareLocalSearchMode,
+    ModelAwareLocalSearchParameters, ModelAwareNeighborhoods, ModelAwareNeighborhoodSelection,
+    Neighborhoods, NeighborhoodSelection, Parameters, PositionLnsParameters,
+    ProgressiveSearchParameters,
     Search, Solution,
 };

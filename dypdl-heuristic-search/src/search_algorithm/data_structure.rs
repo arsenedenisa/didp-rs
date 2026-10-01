@@ -2,6 +2,7 @@
 
 mod beam;
 mod hashable_state;
+mod model_aware_transition_mutex;
 mod search_node;
 mod state_registry;
 mod successor_generator;
@@ -21,6 +22,7 @@ pub use search_node::{
 pub use state_registry::{
     remove_dominated, InsertionResult, StateInRegistry, StateInformation, StateRegistry,
 };
+pub use model_aware_transition_mutex::ModelAwareTransitionMutex;
 pub use successor_generator::{ApplicableTransitions, SuccessorGenerator};
 pub use transition::{TransitionWithCustomCost, TransitionWithId};
 pub use transition_chain::{CreateTransitionChain, GetTransitions, RcChain};

@@ -12,6 +12,9 @@ mod dual_bound_deorder_lns;
 mod dual_bound_dfbb;
 mod dual_bound_lnbs;
 mod dual_bound_local_search;
+mod dual_bound_model_aware_local_search;
+mod dual_bound_position_lns;
+mod dual_bound_position_lns_local_search;
 mod dual_bound_weighted_astar;
 mod expression_beam_search;
 mod forward_recursion;
@@ -49,7 +52,14 @@ where
         "dual_bound_cabs" => dual_bound_cabs::load_from_yaml(model, config),
         "dual_bound_lnbs" => dual_bound_lnbs::load_from_yaml(model, config),
         "dual_bound_local_search" => dual_bound_local_search::load_from_yaml(model, config),
+        "dual_bound_model_aware_local_search" => {
+            dual_bound_model_aware_local_search::load_from_yaml(model, config)
+        }
         "dual_bound_deorder_lns" => dual_bound_deorder_lns::load_from_yaml(model, config),
+        "dual_bound_position_lns" => dual_bound_position_lns::load_from_yaml(model, config),
+        "dual_bound_position_lns_local_search" => {
+            dual_bound_position_lns_local_search::load_from_yaml(model, config)
+        }
         "dual_bound_dfbb" => dual_bound_dfbb::load_from_yaml(model, config),
         "dual_bound_cbfs" => dual_bound_cbfs::load_from_yaml(model, config),
         "dual_bound_acps" => dual_bound_acps::load_from_yaml(model, config),
