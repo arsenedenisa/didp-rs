@@ -721,17 +721,32 @@ where
         }
     }
 
+    // How many `evaluate` calls between time-budget checks inside `best_neighbor`'s
+    // O(n^2)-candidate loops. Each `evaluate` call itself replays transitions[prefix_len..]
+    // (see its doc), so a single sweep is effectively O(n^3) on a large instance -- without a
+    // check inside the loop (not just once per `search_next` iteration), a single
+    // best_neighbor() call on e.g. a 1000-transition instance with twoopt active can run for
+    // minutes past the configured time_limit before anyone notices. 1024 is cheap to check
+    // (one Instant::now() per 1024 evaluations) while keeping worst-case overrun small
+    // relative to realistic per-evaluate costs.
+    const TIME_CHECK_INTERVAL: u64 = 1024;
+
     // Best-improvement neighborhood exploration for hill climbing: evaluates every
-    // swap and/or relocate move (O(n^2) neighbors) and returns the best feasible one.
+    // active neighborhood kind's moves (O(n^2) candidates each) and returns the best
+    // feasible one found before either exhausting them all or running out of time --
+    // see TIME_CHECK_INTERVAL's doc for why a mid-sweep check is necessary, not just
+    // defensive. A time-cut sweep returns whatever `best` it found so far, same as
+    // exhausting the sweep normally would with nothing better available.
     fn best_neighbor(&mut self) -> Option<(Vec<TransitionWithId>, usize, T)> {
         let n = self.current.len();
         let mut best: Option<(Vec<TransitionWithId>, usize, T)> = None;
         let active = self.active_neighborhood_kinds();
+        let mut evaluated: u64 = 0;
 
         if active.contains(&NeighborhoodKind::Swap) {
             let mut candidate = self.current.clone();
 
-            for i in 0..n {
+            'swap: for i in 0..n {
                 for j in (i + 1)..n {
                     candidate.swap(i, j);
 
@@ -744,9 +759,14 @@ where
                                 best = Some((candidate.clone(), i, cost));
                             }
                         }
+                        evaluated += 1;
                     }
 
                     candidate.swap(i, j); // undo the swap
+
+                    if evaluated % Self::TIME_CHECK_INTERVAL == 0 && self.time_keeper.check_time_limit(true) {
+                        break 'swap;
+                    }
                 }
             }
         }
@@ -754,7 +774,7 @@ where
         if active.contains(&NeighborhoodKind::Relocate) {
             let mut candidate = self.current.clone();
 
-            for i in 0..n {
+            'relocate: for i in 0..n {
                 for j in 0..n {
                     if i == j {
                         continue;
@@ -773,10 +793,15 @@ where
                                 best = Some((candidate.clone(), prefix_len, cost));
                             }
                         }
+                        evaluated += 1;
                     }
 
                     let transition = candidate.remove(j);
                     candidate.insert(i, transition); // undo the relocation
+
+                    if evaluated % Self::TIME_CHECK_INTERVAL == 0 && self.time_keeper.check_time_limit(true) {
+                        break 'relocate;
+                    }
                 }
             }
         }
@@ -789,7 +814,7 @@ where
             // its pool depends on what's currently at that position).
             let shared_pool = (!self.replace_same_param_only).then(|| self.candidate_transitions.clone());
 
-            for i in 0..n {
+            'replace: for i in 0..n {
                 let per_position_pool;
                 let pool: &Vec<TransitionWithId> = match &shared_pool {
                     Some(shared) => shared,
@@ -812,16 +837,21 @@ where
                                 best = Some((candidate.clone(), i, cost));
                             }
                         }
+                        evaluated += 1;
                     }
 
                     candidate[i] = original_transition; // undo the replacement
+
+                    if evaluated % Self::TIME_CHECK_INTERVAL == 0 && self.time_keeper.check_time_limit(true) {
+                        break 'replace;
+                    }
                 }
             }
         }
         if active.contains(&NeighborhoodKind::TwoOpt) {
             let mut candidate = self.current.clone();
 
-            for i in 0..n {
+            'twoopt: for i in 0..n {
                 // j = i + 1 would reverse a single-element slice (a no-op), so skip it.
                 for j in (i + 2)..n {
                     candidate[i + 1..=j].reverse();
@@ -835,9 +865,14 @@ where
                                 best = Some((candidate.clone(), i + 1, cost));
                             }
                         }
+                        evaluated += 1;
                     }
 
                     candidate[i + 1..=j].reverse();
+
+                    if evaluated % Self::TIME_CHECK_INTERVAL == 0 && self.time_keeper.check_time_limit(true) {
+                        break 'twoopt;
+                    }
                 }
             }
         }
