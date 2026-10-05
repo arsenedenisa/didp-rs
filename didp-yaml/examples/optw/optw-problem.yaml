@@ -6,11 +6,13 @@ target:
   reachable: [1, 2, 3]
   location: 0
   time: 0
+  finished: 0
 table_values:
   goal: 4
   profit: { 0: 0, 1: 2, 2: 3, 3: 4, 4: 0 }
   ready_time: { 0: 0, 1: 5, 2: 0, 3: 8, 4: 0 }
   due_date: { 0: 100, 1: 12, 2: 10, 3: 12, 4: 17 }
+  duration: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 }
   travel_time:
     {
       [0, 0]: 0,

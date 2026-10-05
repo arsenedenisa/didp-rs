@@ -63,17 +63,17 @@
 // module with deorder_lns.rs or graph_relaxation_lns.rs.
 
 use super::data_structure::{
-    exceed_bound, HashableState, SuccessorGenerator, TransitionMutex, TransitionWithId,
+    classify_transition_cardinality, exceed_bound, HashableState, SuccessorGenerator,
+    TransitionCardinality, TransitionMutex, TransitionWithId,
 };
 use super::rollout::get_trace;
 use super::search::{Parameters, Search, Solution};
 use super::util::{print_primal_bound, TimeKeeper};
 use crate::f_evaluator_type::FEvaluatorType;
 use dypdl::{
-    expression::{ReferenceExpression, SetElementOperator, SetExpression},
     variable_type::{Element, Numeric},
-    Model, ParentAndChildStateFunctionCache, State, StateFunctionCache, StateInterface,
-    Transition, TransitionInterface,
+    Model, ParentAndChildStateFunctionCache, State, StateFunctionCache, Transition,
+    TransitionInterface,
 };
 use rand::prelude::*;
 use rand_pcg::Pcg64Mcg;
@@ -594,81 +594,46 @@ where
         }
         let alternatives = compute_alternatives(&by_params, &transitions);
 
-        // Whether the initial solution is a permutation of the entire *reachable*
-        // transition catalog (every catalog transition that could ever actually apply is
-        // used exactly once, none repeated) -- same detection as
-        // ModelAwareLocalSearch's (model_aware_local_search.rs), ported here because
-        // free_replace_enabled has the identical failure mode as that file's Replace
-        // neighborhood: widening a freed position's candidates to the full catalog
-        // either duplicates a transition already scheduled elsewhere or drops the one
-        // it replaced, which is provably infeasible for a permutation-shaped domain
-        // (single-machine, TSP-like) since a revisit/omission there is exactly what
-        // feasibility forbids. Force the toggle off regardless of the env var in that
-        // case rather than let it waste beam-repair candidate attempts for the whole run.
-        let is_provably_shrink_only = |var_id: usize, expression: &SetExpression| {
-            matches!(
-                expression,
-                SetExpression::SetElementOperation(SetElementOperator::Remove, _, set)
-                    if matches!(
-                        set.as_ref(),
-                        SetExpression::Reference(ReferenceExpression::Variable(v)) if *v == var_id
-                    )
-            )
-        };
-        let mut var_ever_gains_elements = vec![false; model.target.get_number_of_set_variables()];
-        for t in successor_generator
-            .transitions
-            .iter()
-            .chain(successor_generator.forced_transitions.iter())
-        {
-            for (var_id, expression) in &t.transition.effect.set_effects {
-                if !is_provably_shrink_only(*var_id, expression) {
-                    var_ever_gains_elements[*var_id] = true;
-                }
-            }
+        // Static classification of whether this model's transition count is structurally
+        // fixed (see `classify_transition_cardinality`'s doc for the three buckets). Both
+        // free_replace_enabled and insertion_slack have the same failure mode on a
+        // non-Flexible model: widening a freed position's candidates to the full catalog
+        // (free_replace), or spending steps inserting/omitting transitions beyond the
+        // incumbent's own multiset (insertion_slack), either duplicates a transition
+        // already scheduled elsewhere or drops one still required -- provably infeasible
+        // whenever every reachable parameter group must appear exactly once. This
+        // replaces an earlier, narrower raw-transition permutation check that compared
+        // `transitions.len()` against the UNGROUPED reachable catalog count, which
+        // miscounted any `FixedWithReplacement` domain (e.g. CVRP's `visit`/
+        // `visit-via-depot` pair) as flexible.
+        let cardinality = classify_transition_cardinality::<T>(
+            &model,
+            successor_generator
+                .transitions
+                .iter()
+                .chain(successor_generator.forced_transitions.iter())
+                .map(|t| &t.transition),
+            &transitions,
+        );
+        if std::env::var("DIDP_POSITION_LNS_CARDINALITY_DIAG").is_ok() {
+            eprintln!(
+                "[position_lns cardinality diag] {:?} ({} transitions)",
+                cardinality,
+                transitions.len()
+            );
         }
-        let is_reachable = |t: &Rc<TransitionWithId>| {
-            t.transition.elements_in_set_variable.iter().all(|&(var_id, element)| {
-                var_ever_gains_elements[var_id] || model.target.get_set_variable(var_id).contains(element)
-            })
-        };
-        let reachable_catalog_count = successor_generator
-            .transitions
-            .iter()
-            .chain(successor_generator.forced_transitions.iter())
-            .filter(|t| is_reachable(t))
-            .count();
-        let catalog_lookup: HashMap<(String, Vec<Element>), (bool, usize)> = successor_generator
-            .transitions
-            .iter()
-            .chain(successor_generator.forced_transitions.iter())
-            .map(|t| {
-                (
-                    (t.transition.name.clone(), t.transition.parameter_values.clone()),
-                    (t.forced, t.id),
-                )
-            })
-            .collect();
-        let is_permutation_of_catalog = {
-            let mut seen = HashSet::with_capacity(transitions.len());
-            transitions.len() == reachable_catalog_count
-                && transitions.iter().all(|t| {
-                    catalog_lookup
-                        .get(&(t.name.clone(), t.parameter_values.clone()))
-                        .is_some_and(|&key| seen.insert(key))
-                })
-        };
         // Off by default (DIDP_POSITION_LNS_FREE_REPLACE opts in) -- NOT parity with
         // ModelAwareLocalSearch's Replace: unlike that one (one candidate substituted per
         // neighbor evaluation), this multiplies by every freed position in the destroy set
         // at once, so "full catalog" candidates scale far worse here, especially at the
-        // largest destroy-size arm. The permutation check above is a safe, validated
+        // largest destroy-size arm. The cardinality check above is a safe, validated
         // auto-*disable* regardless of the env var; auto-enabling by default is not safe
         // without also bounding the candidate pool for large catalogs.
-        let free_replace_enabled = if is_permutation_of_catalog {
+        let free_replace_enabled = if cardinality != TransitionCardinality::Flexible {
             if !parameters.parameters.quiet {
                 println!(
-                    "detected permutation-shaped initial solution ({} transitions, full catalog) -- disabling position_lns free-replace",
+                    "detected {:?}-shaped initial solution ({} transitions) -- disabling position_lns free-replace",
+                    cardinality,
                     transitions.len()
                 );
             }
@@ -676,6 +641,27 @@ where
         } else {
             std::env::var("DIDP_POSITION_LNS_FREE_REPLACE").is_ok()
         };
+        // Same reasoning as free_replace_enabled above: an insertion or a deletion
+        // (insertion_slack > 0, see its doc) is provably infeasible on a fixed-cardinality
+        // model, so force it off regardless of the YAML parameter / adaptive toggle rather
+        // than waste beam-repair steps attempting insertions that can never survive
+        // applicability checks for the whole run.
+        let (insertion_slack, adaptive_insertion_slack_enabled) =
+            if cardinality != TransitionCardinality::Flexible {
+                if !parameters.parameters.quiet && parameters.insertion_slack > 0 {
+                    println!(
+                        "detected {:?}-shaped initial solution ({} transitions) -- disabling position_lns insertion_slack",
+                        cardinality,
+                        transitions.len()
+                    );
+                }
+                (0, false)
+            } else {
+                (
+                    parameters.insertion_slack,
+                    std::env::var("DIDP_POSITION_LNS_ADAPTIVE_INSERTION_SLACK").is_ok(),
+                )
+            };
 
         let transitions_len = transitions.len();
         if std::env::var("DIDP_POSITION_LNS_SIZE_DIAG").is_ok() {
@@ -817,8 +803,8 @@ where
                 size_arm_count
             ],
             max_branching: parameters.max_branching.max(1),
-            insertion_slack: parameters.insertion_slack,
-            adaptive_insertion_slack_enabled: std::env::var("DIDP_POSITION_LNS_ADAPTIVE_INSERTION_SLACK").is_ok(),
+            insertion_slack,
+            adaptive_insertion_slack_enabled,
             free_replace_enabled,
             rng: Pcg64Mcg::seed_from_u64(parameters.seed),
             time_keeper: TimeKeeper::with_time_limit(time_limit),

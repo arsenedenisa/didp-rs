@@ -7,6 +7,7 @@ mod search_node;
 mod state_registry;
 mod successor_generator;
 mod transition;
+mod transition_cardinality;
 mod transition_chain;
 mod transition_id_chain;
 mod transition_mutex;
@@ -26,6 +27,7 @@ pub use state_registry::{
 pub use model_aware_transition_mutex::ModelAwareTransitionMutex;
 pub use successor_generator::{ApplicableTransitions, SuccessorGenerator};
 pub use transition::{TransitionWithCustomCost, TransitionWithId};
+pub use transition_cardinality::{classify_transition_cardinality, TransitionCardinality};
 pub use transition_chain::{CreateTransitionChain, GetTransitions, RcChain};
 pub use transition_id_chain::GetTransitionIds;
 pub use transition_mutex::TransitionMutex;

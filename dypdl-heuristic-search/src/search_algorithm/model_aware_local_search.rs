@@ -1,16 +1,18 @@
-use super::data_structure::{exceed_bound, SuccessorGenerator, TransitionWithId};
+use super::data_structure::{
+    classify_transition_cardinality, exceed_bound, SuccessorGenerator, TransitionCardinality,
+    TransitionWithId,
+};
 use super::rollout::{get_trace, rollout};
 use super::search::{Parameters, Search, Solution};
 use super::util::{print_primal_bound, TimeKeeper};
 use dypdl::{
-    expression::{ReferenceExpression, SetElementOperator, SetExpression},
     variable_type::Numeric, Element, Model, ParentAndChildStateFunctionCache, State,
-    StateFunctionCache, StateInterface, Transition,
+    StateFunctionCache, Transition,
 };
 use rand::prelude::*;
 use rand_pcg::Pcg64Mcg;
 use rustc_hash::FxHashMap;
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
@@ -201,6 +203,17 @@ pub struct ModelAwareLocalSearch<T: Numeric, B> {
     // (only one kind active at a time, so a slow Replace sweep eats into the whole run's
     // iteration budget, not just its own).
     replace_same_param_only: bool,
+    // Whether `replace_pool`'s degenerate-pool fallback (a position whose own `by_params`
+    // group is a singleton) may widen to the full catalog. Only safe when the model is
+    // `TransitionCardinality::Flexible` (optw-style "selection" domains, where every group
+    // is naturally a singleton and substituting a structurally different transition is
+    // still feasible) -- NOT safe on a `FixedWithReplacement` domain like cvrp, where a
+    // position's own group being a singleton (e.g. a customer with no via-depot
+    // alternative) doesn't change that substituting a DIFFERENT customer's transition
+    // there is just as infeasible as it would be everywhere else. Computed once at
+    // construction from the same `classify_transition_cardinality` call that decides
+    // whether to auto-enable `replace_same_param_only` in the first place.
+    allow_full_catalog_replace_fallback: bool,
     // Set via `set_turn_deadline` by a caller time-slicing this solver against another `Search`
     // impl (see dual_bound_position_lns_local_search.rs's bandit wrapper). An elapsed-time value
     // (same clock as `time_keeper.elapsed_time()`), not a duration -- checked every loop iteration
@@ -347,31 +360,6 @@ where
         // "could add," so this can only under-count dead transitions, never wrongly exclude
         // a live one (a variable it wrongly treats as "could still gain elements" just
         // means Replace stays a candidate there, same as today's behavior).
-        let is_provably_shrink_only = |var_id: usize, expression: &SetExpression| {
-            matches!(
-                expression,
-                SetExpression::SetElementOperation(SetElementOperator::Remove, _, set)
-                    if matches!(
-                        set.as_ref(),
-                        SetExpression::Reference(ReferenceExpression::Variable(v)) if *v == var_id
-                    )
-            )
-        };
-        let mut var_ever_gains_elements = vec![false; model.target.get_number_of_set_variables()];
-        for t in &candidate_transitions {
-            for (var_id, expression) in &t.transition.effect.set_effects {
-                if !is_provably_shrink_only(*var_id, expression) {
-                    var_ever_gains_elements[*var_id] = true;
-                }
-            }
-        }
-        let is_reachable = |t: &TransitionWithId| {
-            t.transition.elements_in_set_variable.iter().all(|&(var_id, element)| {
-                var_ever_gains_elements[var_id] || model.target.get_set_variable(var_id).contains(element)
-            })
-        };
-        let reachable_catalog_count = candidate_transitions.iter().filter(|t| is_reachable(t)).count();
-
         // Same-parameter grouping used by `replace_same_param_only` -- same key
         // (`parameter_values`) `position_lns.rs`'s `compute_alternatives` groups its
         // `by_params` map by. Computed up front (not just below where it's stored) so the
@@ -383,52 +371,72 @@ where
                 .or_default()
                 .push(t.clone());
         }
-        let replace_same_param_only = std::env::var("DIDP_MALS_REPLACE_SAME_PARAM")
+        let mut replace_same_param_only = std::env::var("DIDP_MALS_REPLACE_SAME_PARAM")
             .map(|v| v == "1")
             .unwrap_or(false);
 
-        // Whether the initial solution is a permutation of the entire *reachable*
-        // transition catalog (every catalog transition that could ever actually apply is
-        // used exactly once, none repeated). In that case Replace is close to dead weight:
-        // substituting transitions[i] with any other catalog transition either duplicates
-        // one already scheduled elsewhere or drops the one it replaced, which is provably
-        // infeasible for a permutation-shaped domain (single-machine, TSP-like) since a
-        // revisit/omission there is exactly what feasibility forbids. Auto-disable it
-        // regardless of the YAML flag rather than let it waste rollouts for the whole run
-        // -- unless it's the only neighborhood left enabled, in which case leave it alone
-        // so the solver doesn't end up with nothing to try. Must run before
-        // `neighborhood_visits`/`neighborhood_avg_reward`/`neighborhood_reward_sum` are
-        // sized below, since those are keyed 1:1 by `enabled_neighborhood_kinds`'s final
-        // length.
-        //
-        // `replace_same_param_only` itself is never globally auto-disabled just because
-        // every `by_params` group is degenerate (size 1): on selection-style domains (e.g.
-        // optw's "which node to visit") no two transitions share identical
-        // `parameter_values`, so EVERY group is degenerate, yet full-catalog Replace still
-        // substitutes in a structurally different transition there and carries real value.
-        // Instead there's a per-position fallback (see `generate_neighbor`'s Replace arm
-        // and `replace_pool`): when a position's same-param pool has only one sibling
-        // (itself), that position falls back to the full catalog rather than the whole
-        // neighborhood being switched off.
-        if enabled_neighborhood_kinds.contains(&NeighborhoodKind::Replace) {
-            let mut seen = HashSet::with_capacity(current.len());
-            let is_permutation_of_catalog = current.len() == reachable_catalog_count
-                && current.iter().all(|t| seen.insert((t.forced, t.id)));
-            let other_enabled = enabled_neighborhood_kinds
-                .iter()
-                .any(|&kind| kind != NeighborhoodKind::Replace);
+        // Whether substituting a position for any OTHER catalog transition is ever
+        // structurally feasible -- see `classify_transition_cardinality`'s doc for the full
+        // reasoning. Computed whenever Replace is enabled at all, regardless of
+        // `replace_same_param_only`'s starting value, since it also governs
+        // `allow_full_catalog_replace_fallback` below (relevant even when the YAML/env var
+        // already requested same-param-only mode).
+        let cardinality = enabled_neighborhood_kinds
+            .contains(&NeighborhoodKind::Replace)
+            .then(|| {
+                classify_transition_cardinality::<T>(
+                    &model,
+                    candidate_transitions.iter().map(|t| &t.transition),
+                    &transitions,
+                )
+            });
 
-            if is_permutation_of_catalog && other_enabled {
-                enabled_neighborhood_kinds.retain(|&kind| kind != NeighborhoodKind::Replace);
+        // Auto-adjust full-catalog Replace (`replace_same_param_only == false` so far --
+        // if the env var already requested same-param-only, leave that choice alone here).
+        // `FixedWithReplacement` (e.g. cvrp's `visit`/`visit-via-depot`, mdkp's
+        // `pack`/`ignore`): full-catalog substitution is infeasible, but *same-param*
+        // substitution is exactly the valid move -- so switch to `replace_same_param_only`
+        // instead of dropping Replace outright, rather than silently leaving these domains
+        // with no replacement-style move at all. `FixedPermutation` has no such fallback
+        // (every group is a singleton, so same-param-only would be a pure no-op there);
+        // Replace is simply disabled there, unless it's the only neighborhood left enabled.
+        if !replace_same_param_only {
+            match cardinality {
+                Some(TransitionCardinality::FixedWithReplacement) => {
+                    replace_same_param_only = true;
 
-                if !parameters.parameters.quiet {
-                    println!(
-                        "detected permutation-shaped initial solution ({} transitions, full catalog) -- disabling replace neighborhood",
-                        current.len()
-                    );
+                    if !parameters.parameters.quiet {
+                        println!(
+                            "detected FixedWithReplacement-shaped initial solution ({} transitions) -- restricting replace neighborhood to same-parameter alternatives",
+                            current.len()
+                        );
+                    }
                 }
+                Some(TransitionCardinality::FixedPermutation) => {
+                    let other_enabled = enabled_neighborhood_kinds
+                        .iter()
+                        .any(|&kind| kind != NeighborhoodKind::Replace);
+
+                    if other_enabled {
+                        enabled_neighborhood_kinds.retain(|&kind| kind != NeighborhoodKind::Replace);
+
+                        if !parameters.parameters.quiet {
+                            println!(
+                                "detected FixedPermutation-shaped initial solution ({} transitions) -- disabling replace neighborhood",
+                                current.len()
+                            );
+                        }
+                    }
+                }
+                Some(TransitionCardinality::Flexible) | None => {}
             }
         }
+
+        // See `allow_full_catalog_replace_fallback`'s doc: only a `Flexible` model (or
+        // Replace not enabled at all, in which case this is unused) may widen a degenerate
+        // same-param pool back out to the full catalog.
+        let allow_full_catalog_replace_fallback =
+            matches!(cardinality, Some(TransitionCardinality::Flexible) | None);
 
         let successor_generator = SuccessorGenerator::<Transition>::from_model(model.clone(), false);
         let has_forced_or_dominance = !model.forward_forced_transitions.is_empty()
@@ -480,6 +488,7 @@ where
             candidate_transitions,
             by_params,
             replace_same_param_only,
+            allow_full_catalog_replace_fallback,
             turn_deadline: None,
         };
 
@@ -881,21 +890,29 @@ where
     }
 
     // Candidate pool for the Replace neighborhood at a position currently holding `current`:
-    // the full grounded catalog by default, or (DIDP_MALS_REPLACE_SAME_PARAM=1) just
-    // `current`'s same-parameter siblings -- see `replace_same_param_only`'s doc. Falls
-    // back to the full catalog if `current`'s parameters happen to have no `by_params`
-    // entry, OR if that entry has only one sibling (current's own transition, with no
-    // genuine alternative) -- a size-1 group is a guaranteed no-op under the restriction,
-    // which on selection-style domains would throw away full-catalog Replace's real value.
+    // the full grounded catalog by default, or (DIDP_MALS_REPLACE_SAME_PARAM=1, or
+    // auto-restricted for a `FixedWithReplacement` model -- see `replace_same_param_only`'s
+    // doc) just `current`'s same-parameter siblings. Falls back to the full catalog if
+    // `current`'s parameters happen to have no `by_params` entry, or if that entry has only
+    // one sibling (current's own transition, with no genuine alternative) -- but ONLY when
+    // `allow_full_catalog_replace_fallback` says that's actually safe (a genuinely
+    // `Flexible`/selection-style model, where substituting a structurally different
+    // transition is still feasible). On a `FixedWithReplacement` model a degenerate
+    // size-1 group is just as infeasible to broaden as any other position, so the fallback
+    // there instead returns that size-1 group itself -- a harmless no-op candidate, not a
+    // reintroduction of full-catalog substitution's infeasibility.
     fn replace_pool(&self, current: &TransitionWithId) -> &Vec<TransitionWithId> {
         if self.replace_same_param_only {
-            self.by_params
-                .get(&current.transition.parameter_values)
-                .filter(|siblings| siblings.len() > 1)
-                .unwrap_or(&self.candidate_transitions)
+            if let Some(siblings) = self.by_params.get(&current.transition.parameter_values) {
+                if siblings.len() > 1 || !self.allow_full_catalog_replace_fallback {
+                    return siblings;
+                }
+            }
         } else {
-            &self.candidate_transitions
+            return &self.candidate_transitions;
         }
+
+        &self.candidate_transitions
     }
 
     // Rollout from prefix to end & returns cost

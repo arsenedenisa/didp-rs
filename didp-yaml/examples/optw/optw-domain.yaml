@@ -14,6 +14,8 @@ state_variables:
   - name: time
     type: integer
     preference: less
+  - name: finished
+    type: integer
 tables:
   - name: goal
     type: element
@@ -27,6 +29,10 @@ tables:
     args:
       - customer
   - name: due_date
+    type: integer
+    args:
+      - customer
+  - name: duration
     type: integer
     args:
       - customer
@@ -52,8 +58,9 @@ transitions:
     effect:
       reachable: (filter x (remove to reachable) (<= (max (+ time (travel_time location to)) (travel_time to x)) (due_date x)))
       location: to
-      time: (max (+ time (travel_time location to)) (ready_time to))
+      time: (+ (max (+ time (travel_time location to)) (ready_time to)) (duration to))
     preconditions:
+      - (= finished 0)
       - (<= (+ time (travel_time location to)) (due_date to))
   - name: finish
     cost: cost
@@ -61,10 +68,12 @@ transitions:
       reachable: (customer)
       location: goal
       time: (+ time (travel_time location goal))
+      finished: 1
     preconditions:
+      - (= finished 0)
       - (<= (+ time (travel_time location goal)) (due_date goal))
 base_cases:
-  - - (= location goal)
+  - - (= finished 1)
 dual_bounds:
   - (floor (fractional_knapsack reachable (- (- (due_date goal) time) (min_to goal)) profit min_to))
   - (floor (fractional_knapsack reachable (- (- (due_date goal) time) (min_from location)) profit min_from))
