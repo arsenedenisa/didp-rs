@@ -444,11 +444,15 @@ pub struct PositionLns<T: Numeric, B> {
     contiguity_gate_steps_total: u64,
     contiguity_gate_steps_narrowed: u64,
     // DIDP_POSITION_LNS_MULTISET_LOOKAHEAD: overrides eval_f_multiset's fixed
-    // lookahead cap (MULTISET_LOOKAHEAD = 24) with a caller-chosen value.
-    // Motivated by the effort diagnostic on cvrp, where per-candidate
-    // lookahead cost dominates iteration throughput. Lowering this trades
-    // f-estimate quality for iteration throughput; unset keeps the original
-    // fixed 24.
+    // lookahead cap (MULTISET_LOOKAHEAD = 24) with a caller-chosen value,
+    // including 0 -- eval_f_multiset's loop checks `simulated >=
+    // lookahead_cap` before simulating the first unplaced position, so 0
+    // falls straight through to the plain dual-bound estimate (eval_f) with
+    // no simulation at all, a real, meaningful "lookahead off" rather than
+    // an invalid value. Motivated by the effort diagnostic on cvrp, where
+    // per-candidate lookahead cost dominates iteration throughput. Lowering
+    // this trades f-estimate quality for iteration throughput; unset keeps
+    // the original fixed 24.
     multiset_lookahead_cap: usize,
     // DIDP_POSITION_LNS_SIZE_TRACE: gates a per-ITERATION (not just
     // per-accept) log line of the chosen destroy-set size and beam width.
@@ -838,7 +842,6 @@ where
             multiset_lookahead_cap: std::env::var("DIDP_POSITION_LNS_MULTISET_LOOKAHEAD")
                 .ok()
                 .and_then(|s| s.trim().parse::<usize>().ok())
-                .filter(|&v| v >= 1)
                 .unwrap_or(MULTISET_LOOKAHEAD),
             size_trace_enabled: std::env::var("DIDP_POSITION_LNS_SIZE_TRACE").is_ok(),
             size_bandit_enabled: env_flag_default_true("DIDP_POSITION_LNS_SIZE_BANDIT"),
